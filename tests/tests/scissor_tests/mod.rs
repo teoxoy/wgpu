@@ -22,6 +22,7 @@ fn scissor_test_impl(ctx: &TestingContext, scissor_rect: Rect, expected_data: [u
         mip_level_count: 1,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
+        texture_binding_view_dimension: None,
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],

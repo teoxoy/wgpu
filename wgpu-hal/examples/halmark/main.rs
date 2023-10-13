@@ -292,6 +292,7 @@ impl<A: hal::Api> Example<A> {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgt::TextureDimension::D2,
+            texture_binding_view_dimension: None,
             format: wgt::TextureFormat::Rgba8UnormSrgb,
             usage: hal::TextureUses::COPY_DST | hal::TextureUses::RESOURCE,
             memory_flags: hal::MemoryFlags::empty(),

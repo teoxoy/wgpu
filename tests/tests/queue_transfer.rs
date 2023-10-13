@@ -17,6 +17,7 @@ fn queue_write_texture_overflow() {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
+            texture_binding_view_dimension: None,
             format: wgpu::TextureFormat::Rgba32Float,
             usage: wgpu::TextureUsages::COPY_DST,
             view_formats: &[],

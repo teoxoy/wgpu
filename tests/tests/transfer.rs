@@ -12,6 +12,7 @@ fn copy_overflow_z() {
         let t1 = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
             dimension: wgpu::TextureDimension::D2,
+            texture_binding_view_dimension: None,
             size: wgpu::Extent3d {
                 width: 256,
                 height: 256,
@@ -26,6 +27,7 @@ fn copy_overflow_z() {
         let t2 = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
             dimension: wgpu::TextureDimension::D2,
+            texture_binding_view_dimension: None,
             size: wgpu::Extent3d {
                 width: 256,
                 height: 256,

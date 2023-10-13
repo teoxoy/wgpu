@@ -5314,6 +5314,10 @@ pub struct TextureDescriptor<L, V> {
     pub sample_count: u32,
     /// Dimensions of the texture.
     pub dimension: TextureDimension,
+    /// Dimension of a view bound as a [`BindingType::Texture`].
+    ///
+    /// Only used by the GLSL backend.
+    pub texture_binding_view_dimension: Option<TextureViewDimension>,
     /// Format of the texture.
     pub format: TextureFormat,
     /// Allowed usages of the texture. If used in other ways, the operation will panic.
@@ -5338,6 +5342,7 @@ impl<L, V> TextureDescriptor<L, V> {
             mip_level_count: self.mip_level_count,
             sample_count: self.sample_count,
             dimension: self.dimension,
+            texture_binding_view_dimension: self.texture_binding_view_dimension,
             format: self.format,
             usage: self.usage,
             view_formats: self.view_formats.clone(),
@@ -5359,6 +5364,7 @@ impl<L, V> TextureDescriptor<L, V> {
             mip_level_count: self.mip_level_count,
             sample_count: self.sample_count,
             dimension: self.dimension,
+            texture_binding_view_dimension: self.texture_binding_view_dimension,
             format: self.format,
             usage: self.usage,
             view_formats: v_fun(self.view_formats.clone()),
@@ -5381,6 +5387,7 @@ impl<L, V> TextureDescriptor<L, V> {
     ///   mip_level_count: 7,
     ///   sample_count: 1,
     ///   dimension: wgpu::TextureDimension::D3,
+    ///   texture_binding_view_dimension: None,
     ///   format: wgpu::TextureFormat::Rgba8Sint,
     ///   usage: wgpu::TextureUsages::empty(),
     ///   view_formats: &[],

@@ -74,6 +74,7 @@ fn reinterpret(
         &wgpu::TextureDescriptor {
             label: None,
             dimension: wgpu::TextureDimension::D2,
+            texture_binding_view_dimension: None,
             size,
             format: src_format,
             usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
@@ -125,6 +126,7 @@ fn reinterpret(
         mip_level_count: 1,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
+        texture_binding_view_dimension: None,
         format: src_format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],

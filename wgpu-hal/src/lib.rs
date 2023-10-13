@@ -927,6 +927,7 @@ pub struct TextureDescriptor<'a> {
     pub mip_level_count: u32,
     pub sample_count: u32,
     pub dimension: wgt::TextureDimension,
+    pub texture_binding_view_dimension: Option<wgt::TextureViewDimension>,
     pub format: wgt::TextureFormat,
     pub usage: TextureUses,
     pub memory_flags: MemoryFlags,

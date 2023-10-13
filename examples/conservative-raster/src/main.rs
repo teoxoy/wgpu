@@ -30,6 +30,7 @@ impl Example {
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
+                texture_binding_view_dimension: None,
                 format: RENDER_TARGET_FORMAT,
                 usage: wgpu::TextureUsages::TEXTURE_BINDING
                     | wgpu::TextureUsages::RENDER_ATTACHMENT,

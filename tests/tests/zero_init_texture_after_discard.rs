@@ -127,6 +127,7 @@ impl<'ctx> TestCase<'ctx> {
             mip_level_count: 1,
             sample_count: 1,
             dimension: TextureDimension::D2,
+            texture_binding_view_dimension: None,
             format,
             usage: TextureUsages::COPY_DST
                 | TextureUsages::COPY_SRC

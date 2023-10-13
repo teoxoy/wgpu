@@ -232,6 +232,7 @@ interface GPUTexture {
     readonly attribute GPUIntegerCoordinateOut mipLevelCount;
     readonly attribute GPUSize32Out sampleCount;
     readonly attribute GPUTextureDimension dimension;
+    readonly attribute GPUTextureViewDimension textureBindingViewDimension;
     readonly attribute GPUTextureFormat format;
     readonly attribute GPUFlagsConstant usage;
 };
@@ -243,6 +244,7 @@ dictionary GPUTextureDescriptor
     GPUIntegerCoordinate mipLevelCount = 1;
     GPUSize32 sampleCount = 1;
     GPUTextureDimension dimension = "2d";
+    GPUTextureViewDimension textureBindingViewDimension;
     required GPUTextureFormat format;
     required GPUTextureUsageFlags usage;
     sequence<GPUTextureFormat> viewFormats = [];

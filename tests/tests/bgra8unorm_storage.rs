@@ -36,6 +36,7 @@ fn bgra8unorm_storage() {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
+            texture_binding_view_dimension: None,
             format: wgpu::TextureFormat::Bgra8Unorm,
             usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],

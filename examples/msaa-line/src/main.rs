@@ -106,6 +106,7 @@ impl Example {
             mip_level_count: 1,
             sample_count,
             dimension: wgpu::TextureDimension::D2,
+            texture_binding_view_dimension: None,
             format: config.view_formats[0],
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             label: None,

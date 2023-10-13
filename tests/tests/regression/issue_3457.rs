@@ -123,6 +123,7 @@ fn pass_reset_vertex_buffer() {
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: TextureDimension::D2,
+                texture_binding_view_dimension: None,
                 format: TextureFormat::Rgba8Unorm,
                 usage: TextureUsages::RENDER_ATTACHMENT,
                 view_formats: &[],

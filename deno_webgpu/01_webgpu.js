@@ -71,6 +71,7 @@ const _depthOrArrayLayers = Symbol("[[depthOrArrayLayers]]");
 const _mipLevelCount = Symbol("[[mipLevelCount]]");
 const _sampleCount = Symbol("[[sampleCount]]");
 const _dimension = Symbol("[[dimension]]");
+const _textureBindingViewDimension = Symbol("[[textureBindingViewDimension]]");
 const _format = Symbol("[[format]]");
 const _type = Symbol("[[type]]");
 const _count = Symbol("[[count]]");
@@ -2081,6 +2082,7 @@ function createGPUTexture(descriptor, device, rid) {
   texture[_mipLevelCount] = descriptor.mipLevelCount;
   texture[_sampleCount] = descriptor.sampleCount;
   texture[_dimension] = descriptor.dimension;
+  texture[_textureBindingViewDimension] = descriptor.textureBindingViewDimension;
   texture[_format] = descriptor.format;
   texture[_usage] = descriptor.usage;
   return texture;
@@ -2106,6 +2108,8 @@ class GPUTexture {
   [_sampleCount];
   /** @type {GPUTextureDimension} */
   [_dimension];
+  /** @type {GPUTextureViewDimension} */
+  [_textureBindingViewDimension];
   /** @type {GPUTextureFormat} */
   [_format];
   /** @type {number} */
@@ -2192,6 +2196,11 @@ class GPUTexture {
   get dimension() {
     webidl.assertBranded(this, GPUTexturePrototype);
     return this[_dimension];
+  }
+
+  get textureBindingViewDimension() {
+    webidl.assertBranded(this, GPUTexturePrototype);
+    return this[_textureBindingViewDimension];
   }
 
   get format() {
@@ -5478,6 +5487,10 @@ const dictMembersGPUTextureDescriptor = [
     key: "dimension",
     converter: webidl.converters["GPUTextureDimension"],
     defaultValue: "2d",
+  },
+  {
+    key: "textureBindingViewDimension",
+    converter: webidl.converters["GPUTextureViewDimension"],
   },
   {
     key: "format",

@@ -42,6 +42,7 @@ fn bad_texture() {
                 mip_level_count: 2000,
                 sample_count: 27,
                 dimension: wgpu::TextureDimension::D2,
+                texture_binding_view_dimension: None,
                 format: wgpu::TextureFormat::Rgba8UnormSrgb,
                 usage: wgpu::TextureUsages::all(),
                 view_formats: &[],

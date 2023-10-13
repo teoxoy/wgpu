@@ -94,6 +94,7 @@ fn bind_group_layout_deduplication() {
         let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
             dimension: wgpu::TextureDimension::D2,
+            texture_binding_view_dimension: None,
             size: wgpu::Extent3d {
                 width: 32,
                 height: 32,

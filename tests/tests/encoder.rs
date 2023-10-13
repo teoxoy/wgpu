@@ -39,6 +39,7 @@ fn drop_encoder_after_error() {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
+            texture_binding_view_dimension: None,
             format: wgpu::TextureFormat::R8Unorm,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],

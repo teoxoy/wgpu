@@ -234,6 +234,7 @@ fn single_texture_clear_test(
         },
         sample_count: 1, // multisampling is not supported for clear
         dimension,
+        texture_binding_view_dimension: None,
         format,
         usage: wgpu::TextureUsages::COPY_SRC | extra_usages,
         view_formats: &[],

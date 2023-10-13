@@ -231,6 +231,7 @@ impl wgpu_example::framework::Example for Example {
             mip_level_count: MIP_LEVEL_COUNT,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
+            texture_binding_view_dimension: None,
             format: TEXTURE_FORMAT,
             usage: wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::RENDER_ATTACHMENT

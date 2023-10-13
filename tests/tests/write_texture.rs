@@ -14,6 +14,7 @@ fn write_texture_subset_2d() {
         let tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
             dimension: wgpu::TextureDimension::D2,
+            texture_binding_view_dimension: None,
             size: wgpu::Extent3d {
                 width: size,
                 height: size,
@@ -110,6 +111,7 @@ fn write_texture_subset_3d() {
         let tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
             dimension: wgpu::TextureDimension::D3,
+            texture_binding_view_dimension: None,
             size: wgpu::Extent3d {
                 width: size,
                 height: size,

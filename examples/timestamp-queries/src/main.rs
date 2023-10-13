@@ -363,6 +363,7 @@ fn render_pass(
         mip_level_count: 1,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
+        texture_binding_view_dimension: None,
         format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[format],

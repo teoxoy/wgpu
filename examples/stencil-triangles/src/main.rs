@@ -149,6 +149,7 @@ impl wgpu_example::framework::Example for Triangles {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
+            texture_binding_view_dimension: None,
             format: wgpu::TextureFormat::Stencil8,
             view_formats: &[],
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,

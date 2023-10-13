@@ -731,6 +731,7 @@ impl<A: HalApi> Device<A> {
             mip_level_count: desc.mip_level_count,
             sample_count: desc.sample_count,
             dimension: desc.dimension,
+            texture_binding_view_dimension: desc.texture_binding_view_dimension,
             format: desc.format,
             usage: hal_usage,
             memory_flags: hal::MemoryFlags::empty(),
