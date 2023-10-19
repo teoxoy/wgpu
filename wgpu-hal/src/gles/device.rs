@@ -807,7 +807,6 @@ impl crate::Device<super::Api> for super::Device {
         desc: &crate::TextureViewDescriptor,
     ) -> Result<super::TextureView, crate::DeviceError> {
         Ok(super::TextureView {
-            //TODO: use `conv::map_view_dimension(desc.dimension)`?
             inner: texture.inner.clone(),
             aspects: crate::FormatAspects::new(texture.format, desc.range.aspect),
             mip_levels: desc.range.mip_range(texture.mip_level_count),

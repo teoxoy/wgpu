@@ -929,6 +929,8 @@ impl<A: HalApi> Device<A> {
                 }
             }
             TextureViewDimension::CubeArray => {
+                self.require_downlevel_flags(wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES)?;
+
                 if resolved_array_layer_count % 6 != 0 {
                     return Err(
                         resource::CreateTextureViewError::InvalidCubemapArrayTextureDepth {

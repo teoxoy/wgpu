@@ -360,7 +360,6 @@ impl super::Adapter {
 
         let mut downlevel_flags = wgt::DownlevelFlags::empty()
             | wgt::DownlevelFlags::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES
-            | wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES
             | wgt::DownlevelFlags::COMPARISON_SAMPLERS;
         downlevel_flags.set(wgt::DownlevelFlags::COMPUTE_SHADERS, supports_compute);
         downlevel_flags.set(
@@ -370,6 +369,10 @@ impl super::Adapter {
         downlevel_flags.set(
             wgt::DownlevelFlags::INDIRECT_EXECUTION,
             supported((3, 1), (4, 3)) || extensions.contains("GL_ARB_multi_draw_indirect"),
+        );
+        downlevel_flags.set(
+            wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES,
+            supported((3, 2), (4, 0)) || extensions.contains("GL_EXT_texture_cube_map_array") || extensions.contains("GL_ARB_texture_cube_map_array"),
         );
         //TODO: we can actually support positive `base_vertex` in the same way
         // as we emulate the `start_instance`. But we can't deal with negatives...

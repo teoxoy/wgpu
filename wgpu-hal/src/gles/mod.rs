@@ -342,6 +342,7 @@ impl Texture {
 
     /// Returns the `target`, whether the image is 3d and whether the image is a cubemap.
     fn get_info_from_desc(desc: &TextureDescriptor) -> u32 {
+        let dim = conv::map_view_dimension(desc.texture_binding_view_dimension.unwrap());
         match desc.dimension {
             wgt::TextureDimension::D1 => glow::TEXTURE_2D,
             wgt::TextureDimension::D2 => {
@@ -350,6 +351,7 @@ impl Texture {
                     (false, 1) => glow::TEXTURE_2D,
                     (false, _) => glow::TEXTURE_2D_ARRAY,
                     (true, 6) => glow::TEXTURE_CUBE_MAP,
+                    // problem is that this will get picked even if the downlevel flag is not available
                     (true, _) => glow::TEXTURE_CUBE_MAP_ARRAY,
                 }
             }
