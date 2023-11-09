@@ -8,6 +8,7 @@ mod error;
 mod index;
 mod lower;
 mod parse;
+mod regex;
 #[cfg(test)]
 mod tests;
 

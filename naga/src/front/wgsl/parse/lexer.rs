@@ -30,6 +30,576 @@ fn consume_any(input: &str, what: impl Fn(char) -> bool) -> (&str, &str) {
     input.split_at(pos)
 }
 
+/// When using this type assume no Abstract Int/Float for now
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum Number {
+    /// Abstract Int (-2^63 ≤ i < 2^63)
+    Int(i64),
+    /// Abstract Float (IEEE-754 binary64)
+    Float(f64),
+    /// Concrete i32
+    I32(i32),
+    /// Concrete u32
+    U32(u32),
+    /// Concrete f32
+    F32(f32),
+}
+
+// ^(-)?0[xX]([0-9a-fA-F]+\.[0-9a-fA-F]*|[0-9a-fA-F]*\.[0-9a-fA-F]+)(?:([pP][+-]?[0-9]+)([fh]?))?
+// ^(-)?0[xX]([0-9a-fA-F]+)([pP][+-]?[0-9]+)([fh]?)
+// ^(-)?0[xX]([0-9a-fA-F]+)([iu]?)
+// ^(-?[0-9]+[eE][+-]?[0-9]+|-?(?:[0-9]+\.[0-9]*|[0-9]*\.[0-9]+)(?:[eE][+-]?[0-9]+)?)([fh]?)
+// ^((-)?(?:0|[1-9][0-9]*))([iufh]?)
+
+const PATTERNS: [&str; 5] = [
+    r"^(-)?0[xX]([0-9a-fA-F]+\.[0-9a-fA-F]*|[0-9a-fA-F]*\.[0-9a-fA-F]+)(?:([pP][+-]?[0-9]+)([fh]?))?",
+    r"^(-)?0[xX]([0-9a-fA-F]+)([pP][+-]?[0-9]+)([fh]?)",
+    r"^(-)?0[xX]([0-9a-fA-F]+)([iu]?)",
+    r"^(-?[0-9]+[eE][+-]?[0-9]+|-?(?:[0-9]+\.[0-9]*|[0-9]*\.[0-9]+)(?:[eE][+-]?[0-9]+)?)([fh]?)",
+    r"^((-)?(?:0|[1-9][0-9]*))([iufh]?)",
+];
+
+// const PATTERNS2: [&str; 5] = [
+//     r"(-)?0[xX]([0-9a-fA-F]+\.[0-9a-fA-F]*|[0-9a-fA-F]*\.[0-9a-fA-F]+)(?:([pP][+-]?[0-9]+)([fh]?))?",
+//     r"(-)?0[xX]([0-9a-fA-F]+)([pP][+-]?[0-9]+)([fh]?)",
+//     r"(-)?0[xX]([0-9a-fA-F]+)([iu]?)",
+//     r"(-?[0-9]+[eE][+-]?[0-9]+|-?(?:[0-9]+\.[0-9]*|[0-9]*\.[0-9]+)(?:[eE][+-]?[0-9]+)?)([fh]?)",
+//     r"((-)?(?:0|[1-9][0-9]*))([iufh]?)",
+// ];
+
+// const PATTERN_: &str = r"((-)?0[xX]([0-9a-fA-F]+\.[0-9a-fA-F]*|[0-9a-fA-F]*\.[0-9a-fA-F]+)(?:([pP][+-]?[0-9]+)([fh]?))?)|((-)?0[xX]([0-9a-fA-F]+)([pP][+-]?[0-9]+)([fh]?))|((-)?0[xX]([0-9a-fA-F]+)([iu]?))|((-?[0-9]+[eE][+-]?[0-9]+|-?(?:[0-9]+\.[0-9]*|[0-9]*\.[0-9]+)(?:[eE][+-]?[0-9]+)?)([fh]?))|(((-)?(?:0|[1-9][0-9]*))([iufh]?))";
+
+// const PATTERN__: &str = r"^(?:(-)?0[xX](?:([0-9a-fA-F]+\.[0-9a-fA-F]*|[0-9a-fA-F]*\.[0-9a-fA-F]+)(?:([pP][+-]?[0-9]+)([fh]?))?|([0-9a-fA-F]+)([pP][+-]?[0-9]+)([fh]?)|([0-9a-fA-F]+)([iu]?))|(-?(?:[0-9]+[eE][+-]?[0-9]+|(?:[0-9]+\.[0-9]*|[0-9]*\.[0-9]+)(?:[eE][+-]?[0-9]+)?))([fh]?)|((-)?(?:0|[1-9][0-9]*))([iufh]?))";
+
+const NR_OF_CAPTURE_GROUPS: [usize; 5] = [4, 4, 3, 2, 3];
+
+// const NR_OF_CAPTURE_GROUPS_: usize = 4 + 4 + 3 + 2 + 3 + 5;
+
+// const NR_OF_CAPTURE_GROUPS__: usize = 1 + 3 + 3 + 2 + 2 + 3;
+
+pub(super) struct NumberRegexes {
+    set: regex::RegexSet,
+    regexes: [regex::Regex; 5],
+}
+
+impl NumberRegexes {
+    pub(super) fn new() -> Self {
+        let set = regex::RegexSetBuilder::new(PATTERNS)
+            .ignore_whitespace(true)
+            .build()
+            .unwrap();
+        let regexes = PATTERNS.map(|pattern| {
+            regex::RegexBuilder::new(pattern)
+                .ignore_whitespace(true)
+                .build()
+                .unwrap()
+        });
+        Self { set, regexes }
+    }
+}
+
+// TODO: when implementing Creation-Time Expressions, remove the ability to match the minus sign
+
+fn consume_number_impl<'a>(
+    input: &'a str,
+    number_regexes: &NumberRegexes,
+) -> (Result<Number, NumberError>, &'a str) {
+    // The following regexes will be matched:
+
+    // int_literal :
+    // | / 0                                                                [iu]?   /
+    // | / [1-9][0-9]*                                                      [iu]?   /
+    // | / 0[xX][0-9a-fA-F]+                                                [iu]?   /
+
+    // decimal_float_literal :
+    // | / 0                                                                [fh]    /
+    // | / [1-9][0-9]*                                                      [fh]    /
+    // | / [0-9]*               \.[0-9]+            ([eE][+-]?[0-9]+)?      [fh]?   /
+    // | / [0-9]+               \.[0-9]*            ([eE][+-]?[0-9]+)?      [fh]?   /
+    // | / [0-9]+                                    [eE][+-]?[0-9]+        [fh]?   /
+
+    // hex_float_literal :
+    // | / 0[xX][0-9a-fA-F]*    \.[0-9a-fA-F]+      ([pP][+-]?[0-9]+        [fh]?)? /
+    // | / 0[xX][0-9a-fA-F]+    \.[0-9a-fA-F]*      ([pP][+-]?[0-9]+        [fh]?)? /
+    // | / 0[xX][0-9a-fA-F]+                         [pP][+-]?[0-9]+        [fh]?   /
+
+    // Float parsing notes
+
+    // The following chapters of IEEE 754-2019 are relevant:
+    //
+    // 7.4 Overflow (largest finite number is exceeded by what would have been
+    //     the rounded floating-point result were the exponent range unbounded)
+    //
+    // 7.5 Underflow (tiny non-zero result is detected;
+    //     for decimal formats tininess is detected before rounding when a non-zero result
+    //     computed as though both the exponent range and the precision were unbounded
+    //     would lie strictly between 2^−126)
+    //
+    // 7.6 Inexact (rounded result differs from what would have been computed
+    //     were both exponent range and precision unbounded)
+
+    // The WGSL spec requires us to error:
+    //   on overflow for decimal floating point literals
+    //   on overflow and inexact for hexadecimal floating point literals
+    // (underflow is not mentioned)
+
+    // hexf_parse errors on overflow, underflow, inexact
+    // rust std lib float from str handles overflow, underflow, inexact transparently (rounds and will not error)
+
+    // Therefore we only check for overflow manually for decimal floating point literals
+
+    fn parse_hex_float(input: &str, kind: &str) -> Result<Number, NumberError> {
+        match kind {
+            "" => match hexf_parse::parse_hexf64(input, false) {
+                Ok(num) => Ok(Number::Float(num)),
+                // can only be ParseHexfErrorKind::Inexact but we can't check since it's private
+                _ => Err(NumberError::NotRepresentable),
+            },
+            "f" => match hexf_parse::parse_hexf32(input, false) {
+                Ok(num) => Ok(Number::F32(num)),
+                // can only be ParseHexfErrorKind::Inexact but we can't check since it's private
+                _ => Err(NumberError::NotRepresentable),
+            },
+            "h" => Err(NumberError::UnimplementedF16),
+            _ => unreachable!(),
+        }
+    }
+
+    fn parse_dec_float(input: &str, kind: &str) -> Result<Number, NumberError> {
+        match kind {
+            "" => {
+                let num = input.parse::<f64>().unwrap(); // will never fail
+                num.is_finite()
+                    .then(|| Number::Float(num))
+                    .ok_or(NumberError::NotRepresentable)
+            }
+            "f" => {
+                let num = input.parse::<f32>().unwrap(); // will never fail
+                num.is_finite()
+                    .then(|| Number::F32(num))
+                    .ok_or(NumberError::NotRepresentable)
+            }
+            "h" => Err(NumberError::UnimplementedF16),
+            _ => unreachable!(),
+        }
+    }
+
+    fn parse_int(
+        input: &str,
+        kind: &str,
+        radix: u32,
+        is_negative: bool,
+    ) -> Result<Number, NumberError> {
+        fn map_err(e: core::num::ParseIntError) -> NumberError {
+            match *e.kind() {
+                core::num::IntErrorKind::PosOverflow | core::num::IntErrorKind::NegOverflow => {
+                    NumberError::NotRepresentable
+                }
+                _ => unreachable!(),
+            }
+        }
+        match kind {
+            "" => match i64::from_str_radix(input, radix) {
+                Ok(num) => Ok(Number::Int(num)),
+                Err(e) => Err(map_err(e)),
+            },
+            "i" => match i32::from_str_radix(input, radix) {
+                Ok(num) => Ok(Number::I32(num)),
+                Err(e) => Err(map_err(e)),
+            },
+            "u" if is_negative => Err(NumberError::NotRepresentable),
+            "u" => match u32::from_str_radix(input, radix) {
+                Ok(num) => Ok(Number::U32(num)),
+                Err(e) => Err(map_err(e)),
+            },
+            _ => unreachable!(),
+        }
+    }
+
+    // let res = number_regexes
+    //     .regexes
+    //     .iter()
+    //     .map(|r| r.is_match(input))
+    //     .any(|b| b);
+    // assert!(res);
+
+    // let res = number_regexes
+    //     .regexes2
+    //     .iter()
+    //     .map(|npda| npda.test(input))
+    //     .any(|b| b.0 && !b.1.is_empty());
+    // assert!(res);
+
+    macro_rules! regex_captures {
+        ($index:literal) => {{
+            let regex = &number_regexes.regexes[$index];
+            const COUNT: usize = NR_OF_CAPTURE_GROUPS[$index];
+            debug_assert_eq!(COUNT, regex.captures_len() - 1);
+            regex
+                .captures(input)
+                .map(|captures| {
+                    let mut iter = captures
+                        .iter()
+                        .skip(1)
+                        .map(|m| m.map_or("", |m| m.as_str()));
+
+                    let end = captures.iter().flatten().last().unwrap().end();
+
+                    ([(); COUNT].map(|_| iter.next().unwrap()), &input[end..])
+                })
+                .unwrap()
+        }};
+    }
+
+    // macro_rules! regex_captures2 {
+    //     ($index:literal) => {{
+    //         let regex = &number_regexes.regexes2[$index];
+    //         const COUNT: usize = NR_OF_CAPTURE_GROUPS[$index];
+    //         debug_assert_eq!(COUNT, regex.nr_of_groups() - 1);
+    //         let (matched, captures) = regex.test(input);
+    //         matched.then(|| {
+    //             let end = captures[0].len();
+
+    //             let mut iter = captures.into_iter().skip(1);
+
+    //             ([(); COUNT].map(|_| iter.next().unwrap()), &input[end..])
+    //         })
+    //     }};
+    // }
+
+    // macro_rules! regex_captures_ {
+    //     () => {{
+    //         let regex = &number_regexes.regexes_;
+    //         const COUNT: usize = NR_OF_CAPTURE_GROUPS_;
+    //         debug_assert_eq!(COUNT, regex.nr_of_groups() - 1);
+    //         let (matched, captures) = regex.test(input);
+    //         matched.then(|| {
+    //             let end = captures[0].len();
+
+    //             let mut iter = captures.into_iter().skip(1);
+
+    //             ([(); COUNT].map(|_| iter.next().unwrap()), &input[end..])
+    //         })
+    //     }};
+    // }
+
+    // macro_rules! regex_captures__ {
+    //     () => {{
+    //         let regex = &number_regexes.regexes__;
+    //         const COUNT: usize = NR_OF_CAPTURE_GROUPS__;
+    //         debug_assert_eq!(COUNT, regex.nr_of_groups() - 1);
+    //         let (matched, captures) = regex.test(input);
+    //         matched.then(|| {
+    //             let end = captures[0].len();
+
+    //             let mut iter = captures.into_iter().skip(1);
+
+    //             ([(); COUNT].map(|_| iter.next().unwrap()), &input[end..])
+    //         })
+    //     }};
+    // }
+
+    // macro_rules! regex_captures__s {
+    //     () => {{
+    //         let regex = &RRR;
+    //         const COUNT: usize = NR_OF_CAPTURE_GROUPS__;
+    //         debug_assert_eq!(COUNT, regex.nr_of_groups() - 1);
+    //         let (matched, captures) = regex.test(input);
+    //         matched.then(|| {
+    //             let end = captures[0].len();
+    //             (captures, &input[end..])
+    //         })
+    //     }};
+    // }
+
+    // macro_rules! regex_captures_r {
+    //     () => {{
+    //         let regex = &number_regexes.regexes_r;
+    //         const COUNT: usize = NR_OF_CAPTURE_GROUPS__;
+    //         debug_assert_eq!(COUNT, regex.captures_len() - 1);
+    //         regex.captures(input).map(|captures| {
+    //             let end = captures[0].len();
+
+    //             let mut iter = captures
+    //                 .iter()
+    //                 .skip(1)
+    //                 .map(|m| m.map_or("", |m| m.as_str()));
+
+    //             ([(); COUNT].map(|_| iter.next().unwrap()), &input[end..])
+    //         })
+    //     }};
+    // }
+
+    // if let Some((cap, rest)) = regex_captures__s!() {
+    //     if !cap[2].is_empty() {
+    //         let sign = cap[1];
+    //         let significand = cap[2];
+    //         let exponent = cap[3];
+    //         let kind = cap[4];
+    //         // | / 0[xX][0-9a-fA-F]+    \.[0-9a-fA-F]*      ([pP][+-]?[0-9]+        [fh]?)? /
+    //         // | / 0[xX][0-9a-fA-F]*    \.[0-9a-fA-F]+      ([pP][+-]?[0-9]+        [fh]?)? /
+
+    //         // 0[xX] and [pP] is required by hexf
+    //         let hexf_input = &format!(
+    //             "{}0x{}{}",
+    //             sign,
+    //             significand,
+    //             if exponent.is_empty() { "p0" } else { exponent }
+    //         );
+
+    //         (parse_hex_float(hexf_input, kind), rest)
+    //     } else if !cap[5].is_empty() {
+    //         let sign = cap[1];
+    //         let significand = cap[5];
+    //         let exponent = cap[6];
+    //         let kind = cap[7];
+    //         // | / 0[xX][0-9a-fA-F]+                         [pP][+-]?[0-9]+        [fh]?   /
+
+    //         // 0[xX] and . is required by hexf
+    //         let hexf_input = &format!("{}0x{}.{}", sign, significand, exponent);
+
+    //         (parse_hex_float(hexf_input, kind), rest)
+    //     } else if !cap[8].is_empty() {
+    //         let sign = cap[1];
+    //         let digits = cap[8];
+    //         let kind = cap[9];
+    //         // | / 0[xX][0-9a-fA-F]+                                                [iu]?   /
+
+    //         let is_negative = sign == "-";
+    //         let digits_with_sign = if is_negative {
+    //             Cow::Owned(format!("-{}", digits))
+    //         } else {
+    //             Cow::Borrowed(digits)
+    //         };
+
+    //         (parse_int(&digits_with_sign, kind, 16, is_negative), rest)
+    //     } else if !cap[10].is_empty() {
+    //         let number = cap[10];
+    //         let kind = cap[11];
+    //         // | / [0-9]+                                    [eE][+-]?[0-9]+        [fh]?   /
+    //         // | / [0-9]+               \.[0-9]*            ([eE][+-]?[0-9]+)?      [fh]?   /
+    //         // | / [0-9]*               \.[0-9]+            ([eE][+-]?[0-9]+)?      [fh]?   /
+
+    //         (parse_dec_float(number, kind), rest)
+    //     } else if !cap[12].is_empty() {
+    //         let digits_with_sign = cap[12];
+    //         let sign = cap[13];
+    //         let kind = cap[14];
+    //         // | / 0                                                                [iufh]? /
+    //         // | / [1-9][0-9]*                                                      [iufh]? /
+
+    //         let is_negative = sign == "-";
+
+    //         match kind {
+    //             "" | "i" | "u" => (parse_int(digits_with_sign, kind, 10, is_negative), rest),
+    //             "f" | "h" => (parse_dec_float(digits_with_sign, kind), rest),
+    //             _ => unreachable!(),
+    //         }
+    //     } else {
+    //         unreachable!()
+    //     }
+    // } else {
+    //     (Err(NumberError::Invalid), input)
+    // }
+
+    // if let Some((cap, rest)) = regex_captures_!() {
+    //     if !cap[0].is_empty() {
+    //         let [sign, significand, exponent, kind]: [&str; 4] = cap[1..5].try_into().unwrap();
+    //         // | / 0[xX][0-9a-fA-F]+    \.[0-9a-fA-F]*      ([pP][+-]?[0-9]+        [fh]?)? /
+    //         // | / 0[xX][0-9a-fA-F]*    \.[0-9a-fA-F]+      ([pP][+-]?[0-9]+        [fh]?)? /
+
+    //         // 0[xX] and [pP] is required by hexf
+    //         let hexf_input = &format!(
+    //             "{}0x{}{}",
+    //             sign,
+    //             significand,
+    //             if exponent.is_empty() { "p0" } else { exponent }
+    //         );
+
+    //         (parse_hex_float(hexf_input, kind), rest)
+    //     } else if !cap[5].is_empty() {
+    //         let [sign, significand, exponent, kind]: [&str; 4] = cap[6..10].try_into().unwrap();
+    //         // | / 0[xX][0-9a-fA-F]+                         [pP][+-]?[0-9]+        [fh]?   /
+
+    //         // 0[xX] and . is required by hexf
+    //         let hexf_input = &format!("{}0x{}.{}", sign, significand, exponent);
+
+    //         (parse_hex_float(hexf_input, kind), rest)
+    //     } else if !cap[10].is_empty() {
+    //         let [sign, digits, kind]: [&str; 3] = cap[11..14].try_into().unwrap();
+    //         // | / 0[xX][0-9a-fA-F]+                                                [iu]?   /
+
+    //         let is_negative = sign == "-";
+    //         let digits_with_sign = if is_negative {
+    //             Cow::Owned(format!("-{}", digits))
+    //         } else {
+    //             Cow::Borrowed(digits)
+    //         };
+
+    //         (parse_int(&digits_with_sign, kind, 16, is_negative), rest)
+    //     } else if !cap[14].is_empty() {
+    //         let [number, kind]: [&str; 2] = cap[15..17].try_into().unwrap();
+    //         // | / [0-9]+                                    [eE][+-]?[0-9]+        [fh]?   /
+    //         // | / [0-9]+               \.[0-9]*            ([eE][+-]?[0-9]+)?      [fh]?   /
+    //         // | / [0-9]*               \.[0-9]+            ([eE][+-]?[0-9]+)?      [fh]?   /
+
+    //         (parse_dec_float(number, kind), rest)
+    //     } else if !cap[17].is_empty() {
+    //         let [digits_with_sign, sign, kind]: [&str; 3] = cap[18..21].try_into().unwrap();
+    //         // | / 0                                                                [iufh]? /
+    //         // | / [1-9][0-9]*                                                      [iufh]? /
+
+    //         let is_negative = sign == "-";
+
+    //         match kind {
+    //             "" | "i" | "u" => (parse_int(digits_with_sign, kind, 10, is_negative), rest),
+    //             "f" | "h" => (parse_dec_float(digits_with_sign, kind), rest),
+    //             _ => unreachable!(),
+    //         }
+    //     } else {
+    //         unreachable!()
+    //     }
+    // } else {
+    //     (Err(NumberError::Invalid), input)
+    // }
+
+    // if let Some(([sign, significand, exponent, kind], rest)) = regex_captures2!(0) {
+    //     // | / 0[xX][0-9a-fA-F]+    \.[0-9a-fA-F]*      ([pP][+-]?[0-9]+        [fh]?)? /
+    //     // | / 0[xX][0-9a-fA-F]*    \.[0-9a-fA-F]+      ([pP][+-]?[0-9]+        [fh]?)? /
+
+    //     // 0[xX] and [pP] is required by hexf
+    //     let hexf_input = &format!(
+    //         "{}0x{}{}",
+    //         sign,
+    //         significand,
+    //         if exponent.is_empty() { "p0" } else { exponent }
+    //     );
+
+    //     (parse_hex_float(hexf_input, kind), rest)
+    // } else if let Some(([sign, significand, exponent, kind], rest)) = regex_captures2!(1) {
+    //     // | / 0[xX][0-9a-fA-F]+                         [pP][+-]?[0-9]+        [fh]?   /
+
+    //     // 0[xX] and . is required by hexf
+    //     let hexf_input = &format!("{}0x{}.{}", sign, significand, exponent);
+
+    //     (parse_hex_float(hexf_input, kind), rest)
+    // } else if let Some(([sign, digits, kind], rest)) = regex_captures2!(2) {
+    //     // | / 0[xX][0-9a-fA-F]+                                                [iu]?   /
+
+    //     let is_negative = sign == "-";
+    //     let digits_with_sign = if is_negative {
+    //         Cow::Owned(format!("-{}", digits))
+    //     } else {
+    //         Cow::Borrowed(digits)
+    //     };
+
+    //     (parse_int(&digits_with_sign, kind, 16, is_negative), rest)
+    // } else if let Some(([number, kind], rest)) = regex_captures2!(3) {
+    //     // | / [0-9]+                                    [eE][+-]?[0-9]+        [fh]?   /
+    //     // | / [0-9]+               \.[0-9]*            ([eE][+-]?[0-9]+)?      [fh]?   /
+    //     // | / [0-9]*               \.[0-9]+            ([eE][+-]?[0-9]+)?      [fh]?   /
+
+    //     (parse_dec_float(number, kind), rest)
+    // } else if let Some(([digits_with_sign, sign, kind], rest)) = regex_captures2!(4) {
+    //     // | / 0                                                                [iufh]? /
+    //     // | / [1-9][0-9]*                                                      [iufh]? /
+
+    //     let is_negative = sign == "-";
+
+    //     match kind {
+    //         "" | "i" | "u" => (parse_int(digits_with_sign, kind, 10, is_negative), rest),
+    //         "f" | "h" => (parse_dec_float(digits_with_sign, kind), rest),
+    //         _ => unreachable!(),
+    //     }
+    // } else {
+    //     (Err(NumberError::Invalid), input)
+    // }
+
+    match number_regexes.set.matches(input).iter().next() {
+        Some(0) => {
+            let ([sign, significand, exponent, kind], rest) = regex_captures!(0);
+            // | / 0[xX][0-9a-fA-F]+    \.[0-9a-fA-F]*      ([pP][+-]?[0-9]+        [fh]?)? /
+            // | / 0[xX][0-9a-fA-F]*    \.[0-9a-fA-F]+      ([pP][+-]?[0-9]+        [fh]?)? /
+
+            // 0[xX] and [pP] is required by hexf
+            let hexf_input = &format!(
+                "{}0x{}{}",
+                sign,
+                significand,
+                if exponent.is_empty() { "p0" } else { exponent }
+            );
+
+            (parse_hex_float(hexf_input, kind), rest)
+        }
+        Some(1) => {
+            let ([sign, significand, exponent, kind], rest) = regex_captures!(1);
+            // | / 0[xX][0-9a-fA-F]+                         [pP][+-]?[0-9]+        [fh]?   /
+
+            // 0[xX] and . is required by hexf
+            let hexf_input = &format!("{}0x{}.{}", sign, significand, exponent);
+
+            (parse_hex_float(hexf_input, kind), rest)
+        }
+        Some(2) => {
+            let ([sign, digits, kind], rest) = regex_captures!(2);
+            // | / 0[xX][0-9a-fA-F]+                                                [iu]?   /
+
+            let is_negative = sign == "-";
+            let digits_with_sign = if is_negative {
+                Cow::Owned(format!("-{}", digits))
+            } else {
+                Cow::Borrowed(digits)
+            };
+
+            (parse_int(&digits_with_sign, kind, 16, is_negative), rest)
+        }
+        Some(3) => {
+            let ([number, kind], rest) = regex_captures!(3);
+            // | / [0-9]+                                    [eE][+-]?[0-9]+        [fh]?   /
+            // | / [0-9]+               \.[0-9]*            ([eE][+-]?[0-9]+)?      [fh]?   /
+            // | / [0-9]*               \.[0-9]+            ([eE][+-]?[0-9]+)?      [fh]?   /
+
+            (parse_dec_float(number, kind), rest)
+        }
+        Some(4) => {
+            let ([digits_with_sign, sign, kind], rest) = regex_captures!(4);
+            // | / 0                                                                [iufh]? /
+            // | / [1-9][0-9]*                                                      [iufh]? /
+
+            let is_negative = sign == "-";
+
+            match kind {
+                "" | "i" | "u" => (parse_int(digits_with_sign, kind, 10, is_negative), rest),
+                "f" | "h" => (parse_dec_float(digits_with_sign, kind), rest),
+                _ => unreachable!(),
+            }
+        }
+        _ => (Err(NumberError::Invalid), input),
+    }
+}
+
+fn consume_number2<'a>(input: &'a str, number_regexes: &NumberRegexes) -> (Token<'a>, &'a str) {
+    let res = consume_number_impl(input, number_regexes);
+    let num = match res.0 {
+        Ok(Number::Int(num)) => {
+            use std::convert::TryFrom;
+            i32::try_from(num)
+                .map(Number::I32)
+                .map_err(|_| NumberError::NotRepresentable)
+        }
+        Ok(Number::Float(num)) => {
+            let num = num as f32;
+            if num.is_finite() {
+                Ok(Number::F32(num))
+            } else {
+                Err(NumberError::NotRepresentable)
+            }
+        }
+        num => num,
+    };
+    (Token::Number(num), res.1)
+}
+
 /// Return the token at the start of `input`.
 ///
 /// If `generic` is `false`, then the bit shift operators `>>` or `<<`
