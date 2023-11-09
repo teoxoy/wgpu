@@ -710,7 +710,7 @@ fn convert_wgsl() {
         //TODO: GLSL https://github.com/gfx-rs/naga/issues/874
         (
             "interface",
-            Targets::SPIRV | Targets::METAL | Targets::HLSL | Targets::WGSL,
+            Targets::SPIRV | Targets::METAL | Targets::HLSL | Targets::WGSL | Targets::GLSL,
         ),
         (
             "globals",

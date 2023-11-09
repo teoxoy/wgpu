@@ -102,7 +102,7 @@ impl FeaturesManager {
         check_feature!(SAMPLE_QUALIFIER, 400, 320);
         check_feature!(CLIP_DISTANCE, 130, 300 /* with extension */);
         check_feature!(CULL_DISTANCE, 450, 300 /* with extension */);
-        check_feature!(SAMPLE_VARIABLES, 400, 300);
+        check_feature!(SAMPLE_VARIABLES, 400, 300 /* with extension */);
         check_feature!(DYNAMIC_ARRAY_SIZE, 430, 310);
         check_feature!(DUAL_SOURCE_BLENDING, 330, 300 /* with extension */);
         match version {
@@ -486,7 +486,7 @@ impl<'a, W> Writer<'a, W> {
                             crate::BuiltIn::CullDistance => {
                                 self.features.request(Features::CULL_DISTANCE)
                             }
-                            crate::BuiltIn::SampleIndex => {
+                            crate::BuiltIn::SampleIndex | crate::BuiltIn::SampleMask => {
                                 self.features.request(Features::SAMPLE_VARIABLES)
                             }
                             crate::BuiltIn::ViewIndex => {
