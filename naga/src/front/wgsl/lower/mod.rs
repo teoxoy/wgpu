@@ -143,9 +143,8 @@ pub struct StatementContext<'source, 'temp, 'out> {
     const_typifier: &'temp mut Typifier,
     typifier: &'temp mut Typifier,
     function: &'out mut crate::Function,
-    /// Stores the names of expressions that are assigned in `let` statement
-    /// Also stores the spans of the names, for use in errors.
-    named_expressions: &'out mut FastIndexMap<Handle<crate::Expression>, (String, Span)>,
+    /// Stores the spans of named expressions, for use in errors.
+    named_expression_spans: &'temp mut FastIndexMap<Handle<crate::Expression>, Span>,
     module: &'out mut crate::Module,
 
     /// Which `Expression`s in `self.naga_expressions` are const expressions, in
@@ -197,8 +196,8 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
     }
 
     fn invalid_assignment_type(&self, expr: Handle<crate::Expression>) -> InvalidAssignmentType {
-        if let Some(&(_, span)) = self.named_expressions.get(&expr) {
-            InvalidAssignmentType::ImmutableBinding(span)
+        if let Some(span) = self.named_expression_spans.get(&expr) {
+            InvalidAssignmentType::ImmutableBinding(*span)
         } else {
             match self.function.expressions[expr] {
                 crate::Expression::Swizzle { .. } => InvalidAssignmentType::Swizzle,
@@ -983,6 +982,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         let mut local_table = FastHashMap::default();
         let mut expressions = Arena::new();
         let mut named_expressions = FastIndexMap::default();
+        let mut named_expression_spans = FastIndexMap::default();
 
         let arguments = f
             .arguments
@@ -992,8 +992,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let ty = self.resolve_ast_type(arg.ty, ctx)?;
                 let expr = expressions
                     .append(crate::Expression::FunctionArgument(i as u32), arg.name.span);
+
                 local_table.insert(arg.handle, Typed::Plain(expr));
-                named_expressions.insert(expr, (arg.name.name.to_string(), arg.name.span));
+                named_expressions.insert(expr, arg.name.name.to_string());
+                named_expression_spans.insert(expr, arg.name.span);
 
                 Ok(crate::FunctionArgument {
                     name: Some(arg.name.name.to_string()),
@@ -1021,7 +1023,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             result,
             local_variables: Arena::new(),
             expressions,
-            named_expressions: crate::NamedExpressions::default(),
+            named_expressions,
             body: crate::Block::default(),
         };
 
@@ -1033,19 +1035,14 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             const_typifier: ctx.const_typifier,
             typifier: &mut typifier,
             function: &mut function,
-            named_expressions: &mut named_expressions,
+            named_expression_spans: &mut named_expression_spans,
             types: ctx.types,
             module: ctx.module,
             expression_constness: &mut crate::proc::ExpressionConstnessTracker::new(),
         };
         let mut body = self.block(&f.body, false, &mut stmt_ctx)?;
         ensure_block_returns(&mut body);
-
         function.body = body;
-        function.named_expressions = named_expressions
-            .into_iter()
-            .map(|(key, (name, _))| (key, name))
-            .collect();
 
         if let Some(ref entry) = f.entry_point {
             let workgroup_size = if let Some(workgroup_size) = entry.workgroup_size {
@@ -1137,9 +1134,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     }
 
                     block.extend(emitter.finish(&ctx.function.expressions));
+
                     ctx.local_table.insert(l.handle, Typed::Plain(value));
-                    ctx.named_expressions
-                        .insert(value, (l.name.name.to_string(), l.name.span));
+                    ctx.function
+                        .named_expressions
+                        .insert(value, l.name.name.to_string());
+                    ctx.named_expression_spans.insert(value, l.name.span);
 
                     return Ok(());
                 }
