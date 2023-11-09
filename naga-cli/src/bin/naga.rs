@@ -554,6 +554,56 @@ fn write_output(
 
             fs::write(output_path, bytes.as_slice())?;
         }
+        "spvasm" => {
+            use naga::back::spv;
+
+            let pipeline_options_owned;
+            let pipeline_options = match params.entry_point {
+                Some(ref name) => {
+                    let ep_index = module
+                        .entry_points
+                        .iter()
+                        .position(|ep| ep.name == *name)
+                        .expect("Unable to find the entry point");
+                    pipeline_options_owned = spv::PipelineOptions {
+                        entry_point: name.clone(),
+                        shader_stage: module.entry_points[ep_index].stage,
+                    };
+                    Some(&pipeline_options_owned)
+                }
+                None => None,
+            };
+
+            params.spv.bounds_check_policies = params.bounds_check_policies;
+            params.spv.flags.set(
+                spv::WriterFlags::ADJUST_COORDINATE_SPACE,
+                !params.keep_coordinate_space,
+            );
+
+            let spv = spv::write_vec(
+                &module,
+                info.as_ref().ok_or(CliError(
+                    "Generating SPIR-V output requires validation to \
+                    succeed, and it failed in a previous step",
+                ))?,
+                &params.spv,
+                pipeline_options,
+            )
+            .unwrap_pretty();
+            // let bytes = spv
+            //     .iter()
+            //     .fold(Vec::with_capacity(spv.len() * 4), |mut v, w| {
+            //         v.extend_from_slice(&w.to_le_bytes());
+            //         v
+            //     });
+
+            use rspirv::binary::Disassemble;
+            let dis = rspirv::dr::load_words(spv)
+                .expect("Produced invalid SPIR-V")
+                .disassemble();
+
+            fs::write(output_path, dis)?;
+        }
         stage @ ("vert" | "frag" | "comp") => {
             use naga::back::glsl;
 
