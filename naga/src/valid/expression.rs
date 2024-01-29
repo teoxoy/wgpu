@@ -630,13 +630,15 @@ impl super::Validator {
 
                         match (sample, class.is_multisampled()) {
                             (None, false) => {}
-                            (Some(sample), true) => {
-                                if resolver[sample].scalar_kind() != Some(Sk::Sint) {
-                                    return Err(ExpressionError::InvalidImageOtherIndexType(
-                                        sample,
-                                    ));
+                            (Some(sample), true) => match resolver[sample] {
+                                Ti::Scalar(Sc {
+                                    kind: Sk::Sint | Sk::Uint,
+                                    ..
+                                }) => {}
+                                _ => {
+                                    return Err(ExpressionError::InvalidImageOtherIndexType(sample))
                                 }
-                            }
+                            },
                             _ => {
                                 return Err(ExpressionError::InvalidImageOtherIndex);
                             }
@@ -644,11 +646,15 @@ impl super::Validator {
 
                         match (level, class.is_mipmapped()) {
                             (None, false) => {}
-                            (Some(level), true) => {
-                                if resolver[level].scalar_kind() != Some(Sk::Sint) {
-                                    return Err(ExpressionError::InvalidImageOtherIndexType(level));
+                            (Some(level), true) => match resolver[level] {
+                                Ti::Scalar(Sc {
+                                    kind: Sk::Sint | Sk::Uint,
+                                    ..
+                                }) => {}
+                                _ => {
+                                    return Err(ExpressionError::InvalidImageOtherIndexType(level))
                                 }
-                            }
+                            },
                             _ => {
                                 return Err(ExpressionError::InvalidImageOtherIndex);
                             }
