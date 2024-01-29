@@ -105,6 +105,8 @@ pub enum ExpressionError {
     InvalidSampleLevelBiasType(Handle<crate::Expression>),
     #[error("Sample level (gradient) of {1:?} doesn't match the image dimension {0:?}")]
     InvalidSampleLevelGradientType(crate::ImageDimension, Handle<crate::Expression>),
+    #[error("Level type {0:?} provided to textureDimensions must be a scalar integer")]
+    InvalidLevelTypeForTextureDimensions(Handle<crate::Expression>),
     #[error("Unable to cast")]
     InvalidCastArgument,
     #[error("Invalid argument count for {0:?}")]
@@ -656,6 +658,21 @@ impl super::Validator {
                         };
                         if !good {
                             return Err(ExpressionError::InvalidImageClass(class));
+                        }
+
+                        match query {
+                            crate::ImageQuery::Size { level: Some(expr) } => match resolver[expr] {
+                                Ti::Scalar(Sc {
+                                    kind: Sk::Sint | Sk::Uint,
+                                    ..
+                                }) => {}
+                                _ => {
+                                    return Err(
+                                        ExpressionError::InvalidLevelTypeForTextureDimensions(expr),
+                                    )
+                                }
+                            },
+                            _ => {}
                         }
                     }
                     _ => return Err(ExpressionError::ExpectedImageType(ty)),
