@@ -99,7 +99,7 @@ pub enum ExpressionError {
     InvalidGatherComponent(crate::SwizzleComponent),
     #[error("Gather can't be done for image dimension {0:?}")]
     InvalidGatherDimension(crate::ImageDimension),
-    #[error("Sample level (exact) type {0:?} is not a scalar float")]
+    #[error("Sample level (exact) type {0:?} is not a scalar float (for sampled textures) or scalar integer (for depth textures)")]
     InvalidSampleLevelExactType(Handle<crate::Expression>),
     #[error("Sample level (bias) type {0:?} is not a scalar float")]
     InvalidSampleLevelBiasType(Handle<crate::Expression>),
@@ -528,10 +528,23 @@ impl super::Validator {
                     crate::SampleLevel::Auto => ShaderStages::FRAGMENT,
                     crate::SampleLevel::Zero => ShaderStages::all(),
                     crate::SampleLevel::Exact(expr) => {
-                        match resolver[expr] {
-                            Ti::Scalar(Sc {
-                                kind: Sk::Float, ..
-                            }) => {}
+                        match (class, &resolver[expr]) {
+                            (
+                                crate::ImageClass::Sampled {
+                                    kind: Sk::Float,
+                                    multi: false,
+                                },
+                                &Ti::Scalar(Sc {
+                                    kind: Sk::Float, ..
+                                }),
+                            ) => {}
+                            (
+                                crate::ImageClass::Depth { multi: false },
+                                &Ti::Scalar(Sc {
+                                    kind: Sk::Sint | Sk::Uint,
+                                    ..
+                                }),
+                            ) => {}
                             _ => return Err(ExpressionError::InvalidSampleLevelExactType(expr)),
                         }
                         ShaderStages::all()
