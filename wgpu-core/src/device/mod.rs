@@ -297,6 +297,91 @@ impl DeviceLostClosure {
     }
 }
 
+#[repr(u8)]
+pub enum ErrorType {
+    Validation = 0,
+    OutOfMemory = 1,
+    Internal = 2,
+}
+
+pub struct Error {
+    pub r#type: ErrorType,
+    pub error: String,
+}
+
+pub struct ErrorScope {
+    filter: ErrorType,
+    errors: Vec<String>,
+}
+
+pub struct ErrorSink {
+    error_scope_stack: Vec<ErrorScope>,
+    uncaptured_error_handler: DeviceUncapturedErrorClosure,
+}
+
+#[cfg(send_sync)]
+pub type DeviceUncapturedErrorRustCallback = Box<dyn Fn(Error) + Send + 'static>;
+#[cfg(not(send_sync))]
+pub type DeviceUncapturedErrorRustCallback = Box<dyn Fn(Error) + 'static>;
+
+pub struct DeviceUncapturedErrorClosureRust {
+    pub callback: DeviceUncapturedErrorRustCallback,
+}
+
+#[repr(C)]
+pub struct DeviceUncapturedErrorClosureC {
+    pub user_data: *mut u8,
+    pub callback: unsafe extern "C" fn(user_data: *mut u8, r#type: u8, message: *const c_char),
+}
+
+#[cfg(send_sync)]
+unsafe impl Send for DeviceUncapturedErrorClosureC {}
+
+pub struct DeviceUncapturedErrorClosure {
+    inner: DeviceUncapturedErrorClosureInner,
+}
+
+enum DeviceUncapturedErrorClosureInner {
+    Rust(DeviceUncapturedErrorClosureRust),
+    C(DeviceUncapturedErrorClosureC),
+}
+
+impl DeviceUncapturedErrorClosure {
+    pub fn from_rust(callback: DeviceUncapturedErrorRustCallback) -> Self {
+        Self {
+            inner: DeviceUncapturedErrorClosureInner::Rust(DeviceUncapturedErrorClosureRust {
+                callback,
+            }),
+        }
+    }
+
+    /// # Safety
+    ///
+    /// - The callback pointer must be valid to call with the provided user_data
+    ///   pointer.
+    ///
+    /// - Both pointers must point to valid memory until the callback is
+    ///   invoked, which may happen at an unspecified time.
+    pub unsafe fn from_c(closure: DeviceUncapturedErrorClosureC) -> Self {
+        Self {
+            inner: DeviceUncapturedErrorClosureInner::C(closure),
+        }
+    }
+
+    pub(crate) fn call(&self, err: Error) {
+        match self.inner {
+            DeviceUncapturedErrorClosureInner::Rust(ref inner) => (inner.callback)(err),
+            // SAFETY: the contract of the call to from_c says that this unsafe is sound.
+            DeviceUncapturedErrorClosureInner::C(ref inner) => unsafe {
+                // Ensure message is structured as a null-terminated C string. It only
+                // needs to live as long as the callback invocation.
+                let message = std::ffi::CString::new(err.error).unwrap();
+                (inner.callback)(inner.user_data, err.r#type as u8, message.as_ptr())
+            },
+        }
+    }
+}
+
 fn map_buffer(
     raw: &dyn hal::DynDevice,
     buffer: &Buffer,

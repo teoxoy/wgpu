@@ -3,7 +3,7 @@
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
     use player::GlobalPlay as _;
-    use wgc::device::trace;
+    use wgc::device::{trace, DeviceUncapturedErrorClosure};
 
     use std::{
         fs,
@@ -89,6 +89,7 @@ fn main() {
                 None,
                 Some(device_id),
                 Some(queue_id),
+                DeviceUncapturedErrorClosure::from_rust(Box::new(|e| panic!("{}", e.error))),
             );
             if let Err(e) = res {
                 panic!("{e:?}");

@@ -605,63 +605,39 @@ pub enum ErrorFilter {
 }
 static_assertions::assert_impl_all!(ErrorFilter: Send, Sync);
 
-/// Lower level source of the error.
-///
-/// `Send + Sync` varies depending on configuration.
-#[cfg(send_sync)]
-#[cfg_attr(docsrs, doc(cfg(all())))]
-pub type ErrorSource = Box<dyn error::Error + Send + Sync + 'static>;
-/// Lower level source of the error.
-///
-/// `Send + Sync` varies depending on configuration.
-#[cfg(not(send_sync))]
-#[cfg_attr(docsrs, doc(cfg(all())))]
-pub type ErrorSource = Box<dyn error::Error + 'static>;
-
 /// Error type
 #[derive(Debug)]
 pub enum Error {
     /// Out of memory error
-    OutOfMemory {
-        /// Lower level source of the error.
-        source: ErrorSource,
-    },
+    OutOfMemory(String),
     /// Validation error, signifying a bug in code or data
-    Validation {
-        /// Lower level source of the error.
-        source: ErrorSource,
-        /// Description of the validation error.
-        description: String,
-    },
+    Validation(String),
     /// Internal error. Used for signalling any failures not explicitly expected by WebGPU.
     ///
     /// These could be due to internal implementation or system limits being reached.
-    Internal {
-        /// Lower level source of the error.
-        source: ErrorSource,
-        /// Description of the internal GPU error.
-        description: String,
-    },
+    Internal(String),
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(Error: Send, Sync);
 
-impl error::Error for Error {
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        match self {
-            Error::OutOfMemory { source } => Some(source.as_ref()),
-            Error::Validation { source, .. } => Some(source.as_ref()),
-            Error::Internal { source, .. } => Some(source.as_ref()),
-        }
-    }
-}
+impl error::Error for Error {}
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Error::OutOfMemory { .. } => f.write_str("Out of Memory"),
-            Error::Validation { description, .. } => f.write_str(description),
-            Error::Internal { description, .. } => f.write_str(description),
+            Error::OutOfMemory(err) => f.write_str(err),
+            Error::Validation(err) => f.write_str(err),
+            Error::Internal(err) => f.write_str(err),
+        }
+    }
+}
+
+impl From<wgc::device::Error> for Error {
+    fn from(err: wgc::device::Error) -> Self {
+        match err.r#type {
+            wgc::device::ErrorType::Validation => Error::Validation(err.error),
+            wgc::device::ErrorType::OutOfMemory => Error::OutOfMemory(err.error),
+            wgc::device::ErrorType::Internal => Error::Internal(err.error),
         }
     }
 }

@@ -2,7 +2,7 @@ use crate::{
     context::downcast_ref, AdapterInfo, BindGroupDescriptor, BindGroupLayoutDescriptor,
     BindingResource, BufferBinding, BufferDescriptor, CommandEncoderDescriptor, CompilationInfo,
     CompilationMessage, CompilationMessageType, ComputePassDescriptor, ComputePipelineDescriptor,
-    DownlevelCapabilities, ErrorSource, Features, Label, Limits, LoadOp, MapMode, Operations,
+    DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode, Operations,
     PipelineCacheDescriptor, PipelineLayoutDescriptor, RenderBundleEncoderDescriptor,
     RenderPipelineDescriptor, SamplerDescriptor, ShaderModuleDescriptor,
     ShaderModuleDescriptorSpirV, ShaderSource, StoreOp, SurfaceStatus, SurfaceTargetUnsafe,
@@ -24,7 +24,10 @@ use std::{
     sync::Arc,
 };
 use wgc::error::ContextErrorSource;
-use wgc::{command::bundle_ffi::*, device::DeviceLostClosure, pipeline::CreateShaderModuleError};
+use wgc::{
+    command::bundle_ffi::*, device::DeviceLostClosure, device::DeviceUncapturedErrorClosure,
+    pipeline::CreateShaderModuleError,
+};
 use wgt::WasmNotSendSync;
 
 pub struct ContextWgpuCore(wgc::global::Global);
@@ -107,6 +110,12 @@ impl ContextWgpuCore {
         if trace_dir.is_some() {
             log::error!("Feature 'trace' has been removed temporarily, see https://github.com/gfx-rs/wgpu/issues/5974");
         }
+        let error_sink = Arc::new(Mutex::new(ErrorSinkRaw::new()));
+        let error_sink_clone = error_sink.clone();
+        let uncaptured_error_handler =
+            DeviceUncapturedErrorClosure::from_rust(Box::new(move |err| {
+                error_sink_clone.lock().handle_uncaptured_error(err.into())
+            }));
         let (device_id, queue_id) = unsafe {
             self.0.create_device_from_hal(
                 *adapter,
@@ -115,9 +124,9 @@ impl ContextWgpuCore {
                 None,
                 None,
                 None,
+                uncaptured_error_handler,
             )
         }?;
-        let error_sink = Arc::new(Mutex::new(ErrorSinkRaw::new()));
         let device = Device {
             id: device_id,
             error_sink: error_sink.clone(),
@@ -271,29 +280,24 @@ impl ContextWgpuCore {
         label: Label<'_>,
         fn_ident: &'static str,
     ) {
-        let source_error: ErrorSource = Box::new(wgc::error::ContextError {
+        let source_error = wgc::error::ContextError {
             fn_ident,
             source,
             label: label.unwrap_or_default().to_string(),
-        });
+        };
         let mut sink = sink_mutex.lock();
-        let mut source_opt: Option<&(dyn Error + 'static)> = Some(&*source_error);
+        let mut source_opt: Option<&(dyn Error + 'static)> = Some(&source_error);
         let error = loop {
             if let Some(source) = source_opt {
                 if let Some(wgc::device::DeviceError::OutOfMemory) =
                     source.downcast_ref::<wgc::device::DeviceError>()
                 {
-                    break crate::Error::OutOfMemory {
-                        source: source_error,
-                    };
+                    break crate::Error::OutOfMemory(self.format_error(&source_error));
                 }
                 source_opt = source.source();
             } else {
                 // Otherwise, it is a validation error
-                break crate::Error::Validation {
-                    description: self.format_error(&*source_error),
-                    source: source_error,
-                };
+                break crate::Error::Validation(self.format_error(&source_error));
             }
         };
         sink.handle_error(error);
@@ -615,12 +619,19 @@ impl crate::Context for ContextWgpuCore {
         if trace_dir.is_some() {
             log::error!("Feature 'trace' has been removed temporarily, see https://github.com/gfx-rs/wgpu/issues/5974");
         }
+        let error_sink = Arc::new(Mutex::new(ErrorSinkRaw::new()));
+        let error_sink_clone = error_sink.clone();
+        let uncaptured_error_handler =
+            DeviceUncapturedErrorClosure::from_rust(Box::new(move |err| {
+                error_sink_clone.lock().handle_uncaptured_error(err.into())
+            }));
         let res = self.0.adapter_request_device(
             *adapter_data,
             &desc.map_label(|l| l.map(Borrowed)),
             None,
             None,
             None,
+            uncaptured_error_handler,
         );
         let (device_id, queue_id) = match res {
             Ok(ids) => ids,
@@ -628,7 +639,6 @@ impl crate::Context for ContextWgpuCore {
                 return ready(Err(err.into()));
             }
         };
-        let error_sink = Arc::new(Mutex::new(ErrorSinkRaw::new()));
         let device = Device {
             id: device_id,
             error_sink: error_sink.clone(),
@@ -3014,9 +3024,9 @@ impl ErrorSinkRaw {
     #[track_caller]
     fn handle_error(&mut self, err: crate::Error) {
         let filter = match err {
-            crate::Error::OutOfMemory { .. } => crate::ErrorFilter::OutOfMemory,
-            crate::Error::Validation { .. } => crate::ErrorFilter::Validation,
-            crate::Error::Internal { .. } => crate::ErrorFilter::Internal,
+            crate::Error::OutOfMemory(_) => crate::ErrorFilter::OutOfMemory,
+            crate::Error::Validation(_) => crate::ErrorFilter::Validation,
+            crate::Error::Internal(_) => crate::ErrorFilter::Internal,
         };
         match self
             .scopes
@@ -3030,13 +3040,18 @@ impl ErrorSinkRaw {
                 }
             }
             None => {
-                if let Some(custom_handler) = self.uncaptured_handler.as_ref() {
-                    (custom_handler)(err);
-                } else {
-                    // direct call preserves #[track_caller] where dyn can't
-                    default_error_handler(err);
-                }
+                self.handle_uncaptured_error(err);
             }
+        }
+    }
+
+    #[track_caller]
+    fn handle_uncaptured_error(&mut self, err: crate::Error) {
+        if let Some(custom_handler) = self.uncaptured_handler.as_ref() {
+            (custom_handler)(err);
+        } else {
+            // direct call preserves #[track_caller] where dyn can't
+            default_error_handler(err);
         }
     }
 }

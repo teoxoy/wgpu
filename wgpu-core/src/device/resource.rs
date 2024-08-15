@@ -53,8 +53,8 @@ use std::{
 };
 
 use super::{
-    queue::Queue, DeviceDescriptor, DeviceError, UserClosures, ENTRYPOINT_FAILURE_ERROR,
-    ZERO_BUFFER_SIZE,
+    queue::Queue, DeviceDescriptor, DeviceError, DeviceUncapturedErrorClosure, ErrorSink,
+    UserClosures, ENTRYPOINT_FAILURE_ERROR, ZERO_BUFFER_SIZE,
 };
 
 /// Structure describing a logical device. Some members are internally mutable,
@@ -146,6 +146,7 @@ pub struct Device {
     #[cfg(feature = "trace")]
     pub(crate) trace: Mutex<Option<trace::Trace>>,
     pub(crate) usage_scopes: UsageScopePool,
+    pub(crate) error_sink: Mutex<ErrorSink>,
 }
 
 pub(crate) enum DeferredDestroy {
@@ -218,6 +219,7 @@ impl Device {
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
         instance_flags: wgt::InstanceFlags,
+        uncaptured_error_handler: DeviceUncapturedErrorClosure,
     ) -> Result<Self, DeviceError> {
         #[cfg(not(feature = "trace"))]
         if let Some(_) = trace_path {
@@ -262,6 +264,11 @@ impl Device {
 
         let alignments = adapter.raw.capabilities.alignments.clone();
         let downlevel = adapter.raw.capabilities.downlevel.clone();
+
+        let error_sink = ErrorSink {
+            error_scope_stack: Vec::new(),
+            uncaptured_error_handler,
+        };
 
         Ok(Self {
             raw: ManuallyDrop::new(raw_device),
@@ -308,6 +315,7 @@ impl Device {
             ),
             deferred_destroy: Mutex::new(rank::DEVICE_DEFERRED_DESTROY, Vec::new()),
             usage_scopes: Mutex::new(rank::DEVICE_USAGE_SCOPES, Default::default()),
+            error_sink: Mutex::new(rank::DEVICE_ERROR_SINK, error_sink),
         })
     }
 

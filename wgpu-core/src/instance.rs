@@ -1,6 +1,8 @@
 use std::sync::Arc;
 use std::{borrow::Cow, collections::HashMap};
 
+use crate::device::DeviceUncapturedErrorClosure;
+
 use crate::{
     api_log,
     device::{queue::Queue, resource::Device, DeviceDescriptor, DeviceError},
@@ -268,6 +270,7 @@ impl Adapter {
         desc: &DeviceDescriptor,
         instance_flags: wgt::InstanceFlags,
         trace_path: Option<&std::path::Path>,
+        uncaptured_error_handler: DeviceUncapturedErrorClosure,
     ) -> Result<(Arc<Device>, Arc<Queue>), RequestDeviceError> {
         api_log!("Adapter::create_device");
 
@@ -278,6 +281,7 @@ impl Adapter {
             desc,
             trace_path,
             instance_flags,
+            uncaptured_error_handler,
         )?;
 
         let device = Arc::new(device);
@@ -292,6 +296,7 @@ impl Adapter {
         desc: &DeviceDescriptor,
         instance_flags: wgt::InstanceFlags,
         trace_path: Option<&std::path::Path>,
+        uncaptured_error_handler: DeviceUncapturedErrorClosure,
     ) -> Result<(Arc<Device>, Arc<Queue>), RequestDeviceError> {
         // Verify all features were exposed by the adapter
         if !self.raw.features.contains(desc.required_features) {
@@ -338,7 +343,13 @@ impl Adapter {
         }
         .map_err(DeviceError::from_hal)?;
 
-        self.create_device_and_queue_from_hal(open, desc, instance_flags, trace_path)
+        self.create_device_and_queue_from_hal(
+            open,
+            desc,
+            instance_flags,
+            trace_path,
+            uncaptured_error_handler,
+        )
     }
 }
 
@@ -759,6 +770,7 @@ impl Global {
         trace_path: Option<&std::path::Path>,
         device_id_in: Option<DeviceId>,
         queue_id_in: Option<QueueId>,
+        uncaptured_error_handler: DeviceUncapturedErrorClosure,
     ) -> Result<(DeviceId, QueueId), RequestDeviceError> {
         profiling::scope!("Adapter::request_device");
         api_log!("Adapter::request_device");
@@ -767,8 +779,12 @@ impl Global {
         let queue_fid = self.hub.queues.prepare(queue_id_in);
 
         let adapter = self.hub.adapters.get(adapter_id);
-        let (device, queue) =
-            adapter.create_device_and_queue(desc, self.instance.flags, trace_path)?;
+        let (device, queue) = adapter.create_device_and_queue(
+            desc,
+            self.instance.flags,
+            trace_path,
+            uncaptured_error_handler,
+        )?;
 
         let device_id = device_fid.assign(device);
         resource_log!("Created Device {:?}", device_id);
@@ -791,6 +807,7 @@ impl Global {
         trace_path: Option<&std::path::Path>,
         device_id_in: Option<DeviceId>,
         queue_id_in: Option<QueueId>,
+        uncaptured_error_handler: DeviceUncapturedErrorClosure,
     ) -> Result<(DeviceId, QueueId), RequestDeviceError> {
         profiling::scope!("Global::create_device_from_hal");
 
@@ -803,6 +820,7 @@ impl Global {
             desc,
             self.instance.flags,
             trace_path,
+            uncaptured_error_handler,
         )?;
 
         let device_id = devices_fid.assign(device);

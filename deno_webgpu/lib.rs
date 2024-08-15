@@ -14,6 +14,7 @@ use std::cell::RefCell;
 use std::collections::HashSet;
 use std::rc::Rc;
 pub use wgpu_core;
+use wgpu_core::device::DeviceUncapturedErrorClosure;
 pub use wgpu_types;
 
 use error::DomExceptionOperationError;
@@ -655,6 +656,7 @@ pub fn op_webgpu_request_device(
             .map(std::path::Path::new),
         None,
         None,
+        DeviceUncapturedErrorClosure::from_rust(Box::new(|_| {})),
     );
     adapter_resource.close();
 
