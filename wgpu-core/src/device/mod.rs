@@ -309,11 +309,13 @@ pub struct Error {
     pub error: String,
 }
 
+#[allow(dead_code)]
 pub struct ErrorScope {
     filter: ErrorType,
     errors: Vec<String>,
 }
 
+#[allow(dead_code)]
 pub struct ErrorSink {
     error_scope_stack: Vec<ErrorScope>,
     uncaptured_error_handler: DeviceUncapturedErrorClosure,
@@ -368,6 +370,7 @@ impl DeviceUncapturedErrorClosure {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn call(&self, err: Error) {
         match self.inner {
             DeviceUncapturedErrorClosureInner::Rust(ref inner) => (inner.callback)(err),

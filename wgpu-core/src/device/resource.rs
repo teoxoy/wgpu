@@ -146,6 +146,7 @@ pub struct Device {
     #[cfg(feature = "trace")]
     pub(crate) trace: Mutex<Option<trace::Trace>>,
     pub(crate) usage_scopes: UsageScopePool,
+    #[allow(dead_code)]
     pub(crate) error_sink: Mutex<ErrorSink>,
 }
 
