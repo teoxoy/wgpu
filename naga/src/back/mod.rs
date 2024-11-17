@@ -7,6 +7,7 @@ use crate::proc::ExpressionKindTracker;
 
 #[cfg(dot_out)]
 pub mod dot;
+pub mod dxil;
 #[cfg(glsl_out)]
 pub mod glsl;
 #[cfg(hlsl_out)]
